@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"sync"
 	"syscall"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 	"cogentcore.org/core/styles/units"
 	"github.com/dosgo/wslPortForward/config"
 	"github.com/dosgo/wslPortForward/proxy"
+	"github.com/getlantern/systray"
 )
 
 const (
@@ -31,13 +31,10 @@ var (
 	mainWindow *core.Body
 	logData    *core.Text
 	configList *CustomList
-	logFile    *os.File
-	logMutex   sync.Mutex
 )
 
 func newCustomList() *CustomList {
 	customList := &CustomList{data: &conf.Configs, body: mainWindow}
-
 	// 主布局框架
 	customList.Fr = core.NewFrame(customList.body)
 	customList.Fr.Styler(func(s *styles.Style) {
@@ -66,16 +63,11 @@ func (clist *CustomList) Update() {
 			s.Min.Set(units.Dp(800), units.Dp(20))
 		})
 
-		// 标题
 		core.NewText(row).SetText(fmt.Sprintf("0.0.0.0:%d → %s (%s)",
-			item.ListenPort, item.TargetAddr, item.Protocol)).Styler(func(s *styles.Style) {
-			//s.FlexGrow = 1 // 标题部分自动填充空间
-
-		})
-
+			item.ListenPort, item.TargetAddr, item.Protocol))
 		statusCv := core.NewCanvas(row)
 		statusCv.SetDraw(func(pc *paint.Context) {
-			pc.DrawCircle(0.5, 0.5, 0.1)
+			pc.DrawCircle(0.5, 0.5, 0.3)
 			if item.Status {
 				pc.FillStyle.Color = colors.Scheme.Success.Base
 			} else {
@@ -85,7 +77,7 @@ func (clist *CustomList) Update() {
 		})
 
 		statusCv.Styler(func(s *styles.Style) {
-			s.Min.Set(units.Dp(60), units.Dp(60))
+			s.Min.Set(units.Dp(30), units.Dp(30))
 		})
 
 		// 编辑按钮
@@ -120,6 +112,7 @@ func main() {
 	if cmd != nil {
 		defer cmd.Process.Kill()
 	}
+	go func() { systray.Run(onReady, onExit) }()
 	mainWindow.RunMainWindow()
 }
 
@@ -169,14 +162,13 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 	form := core.NewForm(d)
 	form.SetStruct(cfg)
 	form.Styles.Min.Set(units.Dp(400), units.Dp(600))
-	d.AddBottomBar(func(bar *core.Frame) {
-		d.AddCancel(bar).OnClick(func(e events.Event) {
 
-		})
+	d.AddBottomBar(func(bar *core.Frame) {
+		d.AddCancel(bar)
 		d.AddOK(bar).OnClick(func(e events.Event) {
 			if cfg.ListenPort < 1 || cfg.ListenPort > 65535 {
 				core.MessageSnackbar(b, "The port can only be 1-65535")
-				//showEditDialog(cfg, b, index)
+				e.SetHandled()
 				return
 			}
 
@@ -184,6 +176,7 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 				if v.Protocol == cfg.Protocol && v.ListenPort == cfg.ListenPort {
 					if v.ID != cfg.ID {
 						core.MessageSnackbar(b, "Port is used")
+						e.SetHandled()
 						return
 					}
 				}
@@ -207,9 +200,7 @@ func showGlobalSettings(b *core.Body) {
 	form.SetStruct(conf)
 	form.Styles.Min.Set(units.Dp(400), units.Dp(600))
 	d.AddBottomBar(func(bar *core.Frame) {
-		d.AddCancel(bar).OnClick(func(e events.Event) {
-
-		})
+		d.AddCancel(bar)
 		d.AddOK(bar).OnClick(func(e events.Event) {
 			config.SaveConfigs(conf, configFile)
 		})
@@ -249,4 +240,42 @@ func startWsl(ctx context.Context) *exec.Cmd {
 		return cmd
 	}
 	return nil
+}
+
+//systray.Run(onReady, onExit)
+
+////go:embed icon.png // 将图标文件嵌入到二进制程序中（需在同目录放置 icon.png 文件）
+//var iconData []byte
+
+func onReady() {
+	// ------------------------- 设置图标和提示 -------------------------
+	//systray.SetIcon(iconData)    // 使用内嵌的图标数据
+	systray.SetTitle("WslPortForward")          // 设置标题（部分平台显示）
+	systray.SetTooltip("WslPortForward server") // 鼠标悬停提示
+
+	// ------------------------- 添加菜单项 -------------------------
+	// 普通菜单项
+	mShow := systray.AddMenuItem("show", "show setting")
+
+	// 退出项
+	mQuit := systray.AddMenuItem("exit", "exit")
+
+	// ------------------------- 处理菜单点击事件 -------------------------
+	go func() {
+		for {
+			select {
+			case <-mShow.ClickedCh:
+				fmt.Println("显示窗口")
+				//showWindow() // 自定义显示窗口逻辑
+
+			case <-mQuit.ClickedCh:
+				systray.Quit()
+				mainWindow.Close()
+				return
+			}
+		}
+	}()
+}
+
+func onExit() {
 }
