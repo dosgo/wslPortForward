@@ -117,9 +117,7 @@ func main() {
 }
 
 func buildUI(b *core.Body) {
-
 	fr := core.NewFrame(b)
-
 	core.NewFuncButton(fr).SetFunc(func() {
 		showAddDialog(b)
 	}).SetText("Add Settings") //.SetProperty("", "Add Settings")
@@ -158,16 +156,18 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 	if index > -1 {
 		title = "Edit Settings"
 	}
+
 	d := core.NewBody(title)
+	d.Scene.ContextMenus = nil
 	form := core.NewForm(d)
 	form.SetStruct(cfg)
 	form.Styles.Min.Set(units.Dp(400), units.Dp(600))
-
+	form.Styles.Max.Set(units.Dp(400), units.Dp(600))
 	d.AddBottomBar(func(bar *core.Frame) {
 		d.AddCancel(bar)
 		d.AddOK(bar).OnClick(func(e events.Event) {
 			if cfg.ListenPort < 1 || cfg.ListenPort > 65535 {
-				core.MessageSnackbar(b, "The port can only be 1-65535")
+				core.MessageSnackbar(d, "The port can only be 1-65535")
 				e.SetHandled()
 				return
 			}
@@ -175,7 +175,7 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 			for _, v := range conf.Configs {
 				if v.Protocol == cfg.Protocol && v.ListenPort == cfg.ListenPort {
 					if v.ID != cfg.ID {
-						core.MessageSnackbar(b, "Port is used")
+						core.MessageSnackbar(d, "Port is used")
 						e.SetHandled()
 						return
 					}
@@ -196,6 +196,7 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 
 func showGlobalSettings(b *core.Body) {
 	d := core.NewBody("Global Settings")
+	d.Scene.ContextMenus = nil
 	form := core.NewForm(d)
 	form.SetStruct(conf)
 	form.Styles.Min.Set(units.Dp(400), units.Dp(600))
