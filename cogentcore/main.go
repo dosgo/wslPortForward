@@ -6,8 +6,6 @@ import (
 	"image/color"
 	"log"
 	"os"
-	"os/exec"
-	"syscall"
 	"time"
 
 	"cogentcore.org/core/colors"
@@ -109,7 +107,7 @@ func main() {
 	buildUI(mainWindow)
 	proxy.StartPoxy(conf, false)
 	ctx, _ := context.WithCancel(context.Background())
-	cmd := startWsl(ctx)
+	cmd := config.StartWsl(ctx, conf)
 	if cmd != nil {
 		defer cmd.Process.Kill()
 	}
@@ -226,22 +224,6 @@ func initLog() {
 			}
 		}
 	}()
-}
-
-func startWsl(ctx context.Context) *exec.Cmd {
-	if conf.StartWsl {
-		cmd := exec.CommandContext(ctx, "wsl", conf.WslArgs)
-		if !conf.ShowWsl {
-			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		}
-		fmt.Printf("WSL start  command:%s\r\n", conf.WslArgs)
-		if err := cmd.Start(); err != nil {
-			log.Printf("WSL start  command:%s err: %+v\r\n", conf.WslArgs, err)
-			return nil
-		}
-		return cmd
-	}
-	return nil
 }
 
 func onReady() {

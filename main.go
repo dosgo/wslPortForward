@@ -7,9 +7,7 @@ import (
 	"image/color"
 	"log"
 	"os"
-	"os/exec"
 	"strconv"
-	"syscall"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -50,7 +48,7 @@ func main() {
 	proxy.StartPoxy(conf, false)
 	buildUI()
 	ctx, _ := context.WithCancel(context.Background())
-	cmd := startWsl(ctx)
+	cmd := config.StartWsl(ctx, conf)
 	if cmd != nil {
 		defer cmd.Process.Kill()
 	}
@@ -71,7 +69,6 @@ func main() {
 		mainWindow.Show()
 	}
 	myApp.Run()
-
 }
 
 // 在 buildUI 函数中修改主窗口布局
@@ -247,17 +244,20 @@ func showGlobalSettings() {
 	showWslCheck := widget.NewCheck(config.GetLang("WslShow"), func(b bool) { conf.ShowWsl = b })
 
 	hideWindowCheck := widget.NewCheck(config.GetLang("HideWindow"), func(b bool) { conf.HideWindow = b })
+	AutoUseWslIpCheck := widget.NewCheck(config.GetLang("AutoUseWslIp"), func(b bool) { conf.AutoUseWslIp = b })
 
 	startWslCheck.SetChecked(conf.StartWsl)
 	wslCommandEntry.SetText(conf.WslArgs)
 	showWslCheck.SetChecked(conf.ShowWsl)
 	hideWindowCheck.SetChecked(conf.HideWindow)
+	AutoUseWslIpCheck.SetChecked(conf.AutoUseWslIp)
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			{Text: config.GetLang("WslStart"), Widget: startWslCheck},
 			{Text: config.GetLang("WslArgs"), Widget: wslCommandEntry},
 			{Text: config.GetLang("WslShow"), Widget: showWslCheck},
 			{Text: config.GetLang("HideWindow"), Widget: hideWindowCheck},
+			{Text: config.GetLang("AutoUseWslIp"), Widget: AutoUseWslIpCheck},
 		},
 	}
 
@@ -285,20 +285,4 @@ func initLog() {
 			}
 		}
 	}()
-}
-
-func startWsl(ctx context.Context) *exec.Cmd {
-	if conf.StartWsl {
-		cmd := exec.CommandContext(ctx, "wsl", conf.WslArgs)
-		if !conf.ShowWsl {
-			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		}
-		log.Printf("WSL start  Args:%s\r\n", conf.WslArgs)
-		if err := cmd.Start(); err != nil {
-			log.Printf("WSL start  command:%s err: %+v\r\n", conf.WslArgs, err)
-			return nil
-		}
-		return cmd
-	}
-	return nil
 }

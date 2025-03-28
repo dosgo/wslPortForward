@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,9 +26,19 @@ func StartPoxy(conf *config.Conf, reboot bool) {
 			}
 		}
 	}
-
+	var wslIP = ""
+	if conf.AutoUseWslIp {
+		wslIP = config.GetWslIP()
+	}
 	var err error
 	for _, v := range conf.Configs {
+		if conf.AutoUseWslIp {
+			targetAddrs := strings.Split(v.TargetAddr, ":")
+			if targetAddrs[0] == "127.0.0.1" && wslIP != "" {
+				v.TargetAddr = wslIP + ":" + targetAddrs[1]
+			}
+		}
+
 		if v.Protocol == "tcp" {
 			v.Listener, err = StartTCPServer(fmt.Sprintf("0.0.0.0:%d", v.ListenPort), v.TargetAddr)
 			if err == nil {

@@ -1,12 +1,16 @@
 package config
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
+	"log"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 type ProxyConfig struct {
@@ -20,11 +24,12 @@ type ProxyConfig struct {
 }
 
 type Conf struct {
-	Configs    []*ProxyConfig `display:"-" json:"configs"`
-	StartWsl   bool           `json:"startWsl"`
-	WslArgs    string         `json:"wslArgs"`
-	ShowWsl    bool           `json:"showWsl"`
-	HideWindow bool           `json:"HideWindow"`
+	Configs      []*ProxyConfig `display:"-" json:"configs"`
+	StartWsl     bool           `json:"startWsl"`
+	WslArgs      string         `json:"wslArgs"`
+	ShowWsl      bool           `json:"showWsl"`
+	HideWindow   bool           `json:"HideWindow"`
+	AutoUseWslIp bool           `json:"AutoGetWslIp"`
 }
 
 func SaveConfigs(conf *Conf, configFile string) {
@@ -68,6 +73,7 @@ var langMap = map[string]map[string]string{
 		"WslShow":        "Show WSL Window",
 		"WslArgs":        "WSL Start Args",
 		"HideWindow":     "Hide Window",
+		"AutoUseWslIp":   "Auto Use WSL Ip",
 	},
 	"zh": {
 		"Quit":           "退出",
@@ -91,6 +97,7 @@ var langMap = map[string]map[string]string{
 		"WslShow":        "显示WSL窗口",
 		"WslArgs":        "WSL启动参数",
 		"HideWindow":     "隐藏窗口",
+		"AutoUseWslIp":   "自动使用WSL IP",
 	},
 }
 
@@ -106,3 +113,27 @@ func GetLang(key string) string {
 
 //go:embed icon.png
 var ResourceIconPng []byte
+
+func GetWslIP() string {
+	cmd1 := exec.Command("wsl", "--", "hostname", "-I")
+	output, err := cmd1.CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+func StartWsl(ctx context.Context, conf *Conf) *exec.Cmd {
+	if conf.StartWsl {
+		cmd := exec.CommandContext(ctx, "wsl", conf.WslArgs)
+		if !conf.ShowWsl {
+			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		}
+		log.Printf("WSL start  Args:%s\r\n", conf.WslArgs)
+		if err := cmd.Start(); err != nil {
+			log.Printf("WSL start  command:%s err: %+v\r\n", conf.WslArgs, err)
+			return nil
+		}
+		return cmd
+	}
+	return nil
+}
