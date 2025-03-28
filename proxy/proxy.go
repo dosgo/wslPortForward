@@ -32,21 +32,22 @@ func StartPoxy(conf *config.Conf, reboot bool) {
 	}
 	var err error
 	for _, v := range conf.Configs {
+		var targetAddr = v.TargetAddr
 		if conf.AutoUseWslIp {
 			targetAddrs := strings.Split(v.TargetAddr, ":")
 			if targetAddrs[0] == "127.0.0.1" && wslIP != "" {
-				v.TargetAddr = wslIP + ":" + targetAddrs[1]
+				targetAddr = wslIP + ":" + targetAddrs[1]
 			}
 		}
 
 		if v.Protocol == "tcp" {
-			v.Listener, err = StartTCPServer(fmt.Sprintf("0.0.0.0:%d", v.ListenPort), v.TargetAddr)
+			v.Listener, err = StartTCPServer(fmt.Sprintf("0.0.0.0:%d", v.ListenPort), targetAddr)
 			if err == nil {
 				v.Status = true
 			}
 		}
 		if v.Protocol == "udp" {
-			v.UdpConn, err = StartUDPServer(fmt.Sprintf("0.0.0.0:%d", v.ListenPort), v.TargetAddr)
+			v.UdpConn, err = StartUDPServer(fmt.Sprintf("0.0.0.0:%d", v.ListenPort), targetAddr)
 			if err == nil {
 				v.Status = true
 			}
