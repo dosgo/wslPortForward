@@ -170,8 +170,8 @@ func showAddDialog() {
 
 func showEditDialog(cfg *config.ProxyConfig) {
 	showConfigDialog(cfg, func(updated *config.ProxyConfig) {
-		if updated.Listener != nil {
-			updated.Listener.Close()
+		if cfg.Listener != nil {
+			cfg.Listener.Close()
 		}
 		*cfg = *updated
 		config.SaveConfigs(conf, configFile)
