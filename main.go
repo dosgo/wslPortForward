@@ -2,211 +2,266 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image/color"
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"syscall"
 	"time"
 
-	"cogentcore.org/core/colors"
-	"cogentcore.org/core/core"
-
-	"cogentcore.org/core/events"
-	"cogentcore.org/core/paint"
-	"cogentcore.org/core/styles"
-	"cogentcore.org/core/styles/units"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/widget"
 	"github.com/dosgo/wslPortForward/config"
 	"github.com/dosgo/wslPortForward/proxy"
-	"github.com/getlantern/systray"
 )
 
 const (
 	configFile = "proxy-config.json"
 )
 
+// 在buildUI函数中添加WSL参数控件
+// 在全局变量区添加完整声明
 var (
 	conf       *config.Conf
-	mainWindow *core.Body
-	logData    *core.Text
-	configList *CustomList
+	configList *widget.List
+	mainWindow fyne.Window
+	logData    *widget.TextGrid
 )
 
-func newCustomList() *CustomList {
-	customList := &CustomList{data: &conf.Configs, body: mainWindow}
-	// 主布局框架
-	customList.Fr = core.NewFrame(customList.body)
-	customList.Fr.Styler(func(s *styles.Style) {
-		s.Direction = styles.Column // 垂直布局
-	})
-	customList.Update()
-	return customList
-}
-
-type CustomList struct {
-	data *[]*config.ProxyConfig
-	body *core.Body
-	Fr   *core.Frame
-}
-
-func (clist *CustomList) Update() {
-	clist.Fr.DeleteChildren() // 清空现有内容
-	// 动态生成列表项
-	for i, item := range *clist.data {
-		// 单项容器
-		row := core.NewFrame(clist.Fr)
-		row.Styler(func(s *styles.Style) {
-			s.Direction = styles.Row
-			s.Align.Items = styles.Center
-			s.Border.Radius = styles.BorderRadiusMedium
-			s.Min.Set(units.Dp(800), units.Dp(20))
-		})
-
-		core.NewText(row).SetText(fmt.Sprintf("0.0.0.0:%d → %s (%s)",
-			item.ListenPort, item.TargetAddr, item.Protocol))
-		statusCv := core.NewCanvas(row)
-		statusCv.SetDraw(func(pc *paint.Context) {
-			pc.DrawCircle(0.5, 0.5, 0.3)
-			if item.Status {
-				pc.FillStyle.Color = colors.Scheme.Success.Base
-			} else {
-				pc.FillStyle.Color = colors.Scheme.Error.Base
-			}
-			pc.Fill()
-		})
-
-		statusCv.Styler(func(s *styles.Style) {
-			s.Min.Set(units.Dp(30), units.Dp(30))
-		})
-
-		// 编辑按钮
-		core.NewButton(row).SetText("Edit").OnClick(func(e events.Event) {
-			showEditDialog(item, clist.body, i)
-		})
-		// 删除按钮
-		core.NewButton(row).SetText("remove").OnClick(func(e events.Event) {
-			if conf.Configs[i].Listener != nil {
-				conf.Configs[i].Listener.Close()
-			}
-			conf.Configs = append(conf.Configs[:i], conf.Configs[i+1:]...)
-			config.SaveConfigs(conf, configFile)
-			clist.Update()
-		})
-	}
-	clist.Fr.Update()
-	clist.body.Update()
-}
-
+// 在main函数中添加日志初始化
 func main() {
+	logData = widget.NewTextGrid()
 	initLog()
-	mainWindow = core.NewBody("wslPortForward")
-	mainWindow.Styles.Min.Set(units.Dp(800), units.Dp(600))
-	mainWindow.Scene.ContextMenus = nil
+	myApp := app.New()
 	conf = &config.Conf{}
 	config.LoadConfigs(conf, configFile)
-	buildUI(mainWindow)
+
+	mainWindow = myApp.NewWindow(config.GetLang("AppName"))
+	mainWindow.SetIcon(fyne.NewStaticResource("icon", config.ResourceIconPng))
+	mainWindow.SetCloseIntercept(func() { mainWindow.Hide() }) // 点击关闭隐藏窗口
 	proxy.StartPoxy(conf, false)
+	buildUI()
 	ctx, _ := context.WithCancel(context.Background())
 	cmd := startWsl(ctx)
 	if cmd != nil {
 		defer cmd.Process.Kill()
 	}
-	go func() { systray.Run(onReady, onExit) }()
-	mainWindow.RunMainWindow()
+	// 系统托盘支持
+	if desk, ok := myApp.(desktop.App); ok {
+		menu := fyne.NewMenu("Proxy Manager",
+			fyne.NewMenuItem(config.GetLang("ShowSettings"), func() { mainWindow.Show() }),
+			// 修改系统托盘退出菜单项
+			fyne.NewMenuItem(config.GetLang("Quit"), func() {
+				myApp.Quit()
+			}),
+		)
+		desk.SetSystemTrayMenu(menu)
+		desk.SetSystemTrayIcon(fyne.NewStaticResource("icon", config.ResourceIconPng))
+	}
+
+	if !conf.HideWindow {
+		mainWindow.Show()
+	}
+	myApp.Run()
+
 }
 
-func buildUI(b *core.Body) {
-	fr := core.NewFrame(b)
-	core.NewFuncButton(fr).SetFunc(func() {
-		showAddDialog(b)
-	}).SetText("Add Settings") //.SetProperty("", "Add Settings")
+// 在 buildUI 函数中修改主窗口布局
+func buildUI() {
+	// 配置列表
+	configList = widget.NewList(
+		func() int { return len(conf.Configs) },
+		func() fyne.CanvasObject {
+			return container.NewHBox(
+				widget.NewLabel("Template"),
+				container.NewCenter(container.NewGridWrap(
+					fyne.NewSize(20, 20), // 设置圆形直径
+					canvas.NewCircle(color.RGBA{R: 255, A: 255}),
+				)),
+				widget.NewButton(config.GetLang("Edit"), nil),
+				widget.NewButton(config.GetLang("Delete"), nil),
+			)
+		},
+		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			box := obj.(*fyne.Container)
+			cfg := conf.Configs[id]
 
-	core.NewFuncButton(fr).SetFunc(func() {
-		showGlobalSettings(b)
-	}).SetText("Global Settings")
-	core.NewText(b).SetText("Proxy List:")
-	configList = newCustomList()
-	core.NewText(b).SetText("Logs:")
-	logData = core.NewText(b)
-	logData.SetText("")
-	logData.SetReadOnly(true)
-	logData.Styler(func(s *styles.Style) {
-		s.SetTextWrap(true) // 多行模式
-		s.Background = colors.Uniform(colors.ToBase(color.RGBA{0xeb, 0xeb, 0xeb, 0x20}))
-		s.Padding.Set(units.Dp(8), units.Dp(8))
-		s.Border.Radius = styles.BorderRadiusExtraLarge
-		s.Min.Set(units.Dp(800), units.Dp(20))
-		s.Text.WhiteSpace = styles.WhiteSpacePre
-		s.Max.Set(units.Dp(800))
-	})
+			label := box.Objects[0].(*widget.Label)
+			label.SetText(fmt.Sprintf("0.0.0.0:%d → %s (%s)",
+				cfg.ListenPort, cfg.TargetAddr, cfg.Protocol))
+
+			statusLabel := box.Objects[1].(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*canvas.Circle)
+			if cfg.Status {
+				statusLabel.FillColor = color.RGBA{R: 0, G: 255, B: 00, A: 255}
+			} else {
+				statusLabel.FillColor = color.RGBA{R: 255, G: 0, B: 00, A: 255}
+			}
+			editBtn := box.Objects[2].(*widget.Button)
+			editBtn.OnTapped = func() { showEditDialog(cfg) }
+
+			delBtn := box.Objects[3].(*widget.Button)
+			delBtn.OnTapped = func() { deleteConfig(cfg) }
+		},
+	)
+
+	configScroll := container.NewScroll(configList)
+	configScroll.SetMinSize(fyne.NewSize(0, 150)) // 设置最小高度300像素可显示更多条目
+
+	logScroll := container.NewScroll(logData)
+	logScroll.SetMinSize(fyne.NewSize(600, 300)) // 设置日志框最小尺寸
+
+	// 在 buildUI 函数末尾添加全局设置按钮
+	globalSettingsBtn := widget.NewButton(config.GetLang("GlobalSettings"), showGlobalSettings)
+	addBtn := widget.NewButton(config.GetLang("AddSettings"), showAddDialog)
+
+	// 修改主窗口顶部布局添加全局设置按钮
+	mainWindow.SetContent(container.NewBorder(
+		container.NewVBox(
+			container.NewHBox(addBtn, globalSettingsBtn),
+			widget.NewSeparator(),
+		),
+		container.NewVBox(
+			widget.NewSeparator(),
+			widget.NewLabel(config.GetLang("Logs")),
+			logScroll,
+		),
+		nil, nil,
+		container.NewVBox(
+			widget.NewLabel(config.GetLang("ProxyList")),
+			configScroll,
+		),
+	))
 }
 
-func showAddDialog(b *core.Body) {
-	cfg := &config.ProxyConfig{
+func deleteConfig(cfg *config.ProxyConfig) {
+	for i, c := range conf.Configs {
+		if c.ID == cfg.ID {
+			conf.Configs = append(conf.Configs[:i], conf.Configs[i+1:]...)
+			if cfg.Listener != nil {
+				cfg.Listener.Close()
+			}
+			break
+		}
+	}
+	config.SaveConfigs(conf, configFile)
+	configList.Refresh()
+}
+func showAddDialog() {
+	showConfigDialog(&config.ProxyConfig{
 		Protocol:   "tcp",
 		ListenPort: 8001,
 		TargetAddr: "127.0.0.1:8080",
-	}
-	showEditDialog(cfg, b, -1)
+	}, func(cfg *config.ProxyConfig) {
+		cfg.ID = fmt.Sprintf("%d", time.Now().UnixNano())
+		conf.Configs = append(conf.Configs, cfg)
+		config.SaveConfigs(conf, configFile)
+		proxy.StartPoxy(conf, true)
+		configList.Refresh()
+	})
 }
 
-func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
-	var title = "Add Settings"
-	if index > -1 {
-		title = "Edit Settings"
+func showEditDialog(cfg *config.ProxyConfig) {
+	showConfigDialog(cfg, func(updated *config.ProxyConfig) {
+		*cfg = *updated
+		config.SaveConfigs(conf, configFile)
+		configList.Refresh()
+	})
+}
+
+// 修改后的配置对话框
+func showConfigDialog(cfg *config.ProxyConfig, onSave func(*config.ProxyConfig)) {
+	protocol := widget.NewSelect([]string{"tcp", "udp"}, nil)
+	listenAddr := widget.NewEntry()
+	targetAddr := widget.NewEntry()
+
+	// 初始化表单值（仅保留核心参数）
+	protocol.SetSelected(cfg.Protocol)
+	listenAddr.SetText(fmt.Sprintf("%d", cfg.ListenPort))
+	targetAddr.SetText(cfg.TargetAddr)
+
+	form := &widget.Form{
+		Items: []*widget.FormItem{
+			{Text: config.GetLang("Protocol"), Widget: protocol},
+			{Text: config.GetLang("ListenAddr"), Widget: listenAddr},
+			{Text: config.GetLang("TargetAddr"), Widget: targetAddr},
+		},
 	}
 
-	d := core.NewBody(title)
-	d.Scene.ContextMenus = nil
-	form := core.NewForm(d)
-	form.SetStruct(cfg)
-	form.Styles.Min.Set(units.Dp(400), units.Dp(600))
-	form.Styles.Max.Set(units.Dp(400), units.Dp(600))
-	d.AddBottomBar(func(bar *core.Frame) {
-		d.AddCancel(bar)
-		d.AddOK(bar).OnClick(func(e events.Event) {
-			if cfg.ListenPort < 1 || cfg.ListenPort > 65535 {
-				core.MessageSnackbar(d, "The port can only be 1-65535")
-				e.SetHandled()
-				return
-			}
+	var confDialog *dialog.ConfirmDialog
+	confDialog = dialog.NewCustomConfirm(config.GetLang("EditSettings"), config.GetLang("Save"), config.GetLang("Cancel"), form, func(b bool) {
+		if !b {
+			return
+		}
+		num, _ := strconv.ParseInt(listenAddr.Text, 10, 64)
 
-			for _, v := range conf.Configs {
-				if v.Protocol == cfg.Protocol && v.ListenPort == cfg.ListenPort {
-					if v.ID != cfg.ID {
-						core.MessageSnackbar(d, "Port is used")
-						e.SetHandled()
-						return
-					}
+		if num < 1 || num > 65535 {
+			ErrorDialog := dialog.NewError(errors.New(config.GetLang("PortErrMsg")), mainWindow)
+			ErrorDialog.Show()
+			ErrorDialog.SetOnClosed(func() {
+				confDialog.Show()
+			})
+			return
+		}
+
+		for _, v := range conf.Configs {
+			if v.Protocol == cfg.Protocol && v.ListenPort == cfg.ListenPort {
+				if v.ID != cfg.ID {
+					ErrorDialog := dialog.NewError(errors.New(config.GetLang("PortErrUsed")), mainWindow)
+					ErrorDialog.Show()
+					ErrorDialog.SetOnClosed(func() {
+						confDialog.Show()
+					})
+					return
 				}
 			}
+		}
 
-			cfg.ID = fmt.Sprintf("%d", time.Now().UnixNano())
-			if index == -1 {
-				conf.Configs = append(conf.Configs, cfg)
-			}
-			config.SaveConfigs(conf, configFile)
-			proxy.StartPoxy(conf, true)
-			configList.Update()
-		})
-	})
-	d.RunWindowDialog(b)
+		newCfg := &config.ProxyConfig{
+			Protocol:   protocol.Selected,
+			ListenPort: int(num),
+			TargetAddr: targetAddr.Text,
+		}
+		onSave(newCfg)
+	}, mainWindow)
+	confDialog.Show()
 }
 
-func showGlobalSettings(b *core.Body) {
-	d := core.NewBody("Global Settings")
-	d.Scene.ContextMenus = nil
-	form := core.NewForm(d)
-	form.SetStruct(conf)
-	form.Styles.Min.Set(units.Dp(400), units.Dp(600))
-	d.AddBottomBar(func(bar *core.Frame) {
-		d.AddCancel(bar)
-		d.AddOK(bar).OnClick(func(e events.Event) {
+// 新增全局设置对话框
+func showGlobalSettings() {
+
+	startWslCheck := widget.NewCheck(config.GetLang("WslStart"), func(b bool) { conf.StartWsl = b })
+	wslCommandEntry := widget.NewEntry()
+	showWslCheck := widget.NewCheck(config.GetLang("WslShow"), func(b bool) { conf.ShowWsl = b })
+
+	hideWindowCheck := widget.NewCheck(config.GetLang("HideWindow"), func(b bool) { conf.HideWindow = b })
+
+	startWslCheck.SetChecked(conf.StartWsl)
+	wslCommandEntry.SetText(conf.WslArgs)
+	showWslCheck.SetChecked(conf.ShowWsl)
+	hideWindowCheck.SetChecked(conf.HideWindow)
+	form := &widget.Form{
+		Items: []*widget.FormItem{
+			{Text: config.GetLang("WslStart"), Widget: startWslCheck},
+			{Text: config.GetLang("WslArgs"), Widget: wslCommandEntry},
+			{Text: config.GetLang("WslShow"), Widget: showWslCheck},
+			{Text: config.GetLang("HideWindow"), Widget: hideWindowCheck},
+		},
+	}
+
+	dialog.ShowCustomConfirm(config.GetLang("GlobalSettings"), config.GetLang("Save"), config.GetLang("Cancel"), form, func(b bool) {
+		if b {
+			conf.WslArgs = wslCommandEntry.Text
 			config.SaveConfigs(conf, configFile)
-		})
-	})
-	d.RunWindowDialog(b)
+		}
+	}, mainWindow)
 }
 
 func initLog() {
@@ -220,7 +275,7 @@ func initLog() {
 			if n > 0 {
 				// 主线程更新UI
 				if logData != nil {
-					logData.SetText(logData.Text + string(buf[:n]))
+					logData.SetText(logData.Text() + string(buf[:n]))
 				}
 			}
 		}
@@ -233,7 +288,7 @@ func startWsl(ctx context.Context) *exec.Cmd {
 		if !conf.ShowWsl {
 			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		}
-		fmt.Printf("WSL start  command:%s\r\n", conf.WslArgs)
+		log.Printf("WSL start  Args:%s\r\n", conf.WslArgs)
 		if err := cmd.Start(); err != nil {
 			log.Printf("WSL start  command:%s err: %+v\r\n", conf.WslArgs, err)
 			return nil
@@ -241,42 +296,4 @@ func startWsl(ctx context.Context) *exec.Cmd {
 		return cmd
 	}
 	return nil
-}
-
-//systray.Run(onReady, onExit)
-
-////go:embed icon.png // 将图标文件嵌入到二进制程序中（需在同目录放置 icon.png 文件）
-//var iconData []byte
-
-func onReady() {
-	// ------------------------- 设置图标和提示 -------------------------
-	//systray.SetIcon(iconData)    // 使用内嵌的图标数据
-	systray.SetTitle("WslPortForward")          // 设置标题（部分平台显示）
-	systray.SetTooltip("WslPortForward server") // 鼠标悬停提示
-
-	// ------------------------- 添加菜单项 -------------------------
-	// 普通菜单项
-	mShow := systray.AddMenuItem("show", "show setting")
-
-	// 退出项
-	mQuit := systray.AddMenuItem("exit", "exit")
-
-	// ------------------------- 处理菜单点击事件 -------------------------
-	go func() {
-		for {
-			select {
-			case <-mShow.ClickedCh:
-				fmt.Println("显示窗口")
-				//showWindow() // 自定义显示窗口逻辑
-
-			case <-mQuit.ClickedCh:
-				systray.Quit()
-				mainWindow.Close()
-				return
-			}
-		}
-	}()
-}
-
-func onExit() {
 }
