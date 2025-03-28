@@ -170,8 +170,12 @@ func showAddDialog() {
 
 func showEditDialog(cfg *config.ProxyConfig) {
 	showConfigDialog(cfg, func(updated *config.ProxyConfig) {
+		if updated.Listener != nil {
+			updated.Listener.Close()
+		}
 		*cfg = *updated
 		config.SaveConfigs(conf, configFile)
+		proxy.StartPoxy(conf, true)
 		configList.Refresh()
 	})
 }
@@ -211,6 +215,7 @@ func showConfigDialog(cfg *config.ProxyConfig, onSave func(*config.ProxyConfig))
 			return
 		}
 		newCfg := &config.ProxyConfig{
+			ID:         cfg.ID,
 			Protocol:   protocol.Selected,
 			ListenPort: int(num),
 			TargetAddr: targetAddr.Text,
