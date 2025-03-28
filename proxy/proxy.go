@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/dosgo/wslPortForward/config"
@@ -13,6 +14,8 @@ const (
 	TCP_TIMEOUT = 5 * time.Minute // TCP连接空闲超时
 	UDP_TIMEOUT = 2 * time.Minute // UDP会话空闲超时
 )
+
+var udpNat sync.Map
 
 func StartPoxy(conf *config.Conf, reboot bool) {
 	if reboot {
@@ -97,7 +100,13 @@ func StartUDPServer(listenAddr, targetAddr string) (*net.UDPConn, error) {
 				log.Printf("UDP read err: %v\r\n", err)
 				break
 			}
-			go handleUDPPacket(listener, clientAddr, buf[:n], targetAddr)
+
+			localConn, ok := udpNat.Load(clientAddr.String())
+			if ok {
+				localConn.(net.Conn).Write(buf[:n])
+			} else {
+				go handleUDPPacket(listener, clientAddr, buf[:n], targetAddr)
+			}
 		}
 	}()
 	return listener, nil
@@ -111,26 +120,29 @@ func handleUDPPacket(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte, ta
 		return
 	}
 	defer targetConn.Close()
-
+	udpNat.Store(clientAddr.String(), targetConn)
+	defer udpNat.Delete(clientAddr.String())
 	// 转发到目标
 	if _, err := targetConn.Write(data); err != nil {
 		log.Printf("UDP Forward err : %v\r\n", err)
 		return
 	}
 
-	// 等待响应并回传
-	resp := make([]byte, 65507)
-	targetConn.SetReadDeadline(time.Now().Add(UDP_TIMEOUT))
-	n, err := targetConn.Read(resp)
-	if err != nil {
-		if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
-			log.Printf("UDP read err: %v\r\n", err)
+	for {
+		// 等待响应并回传
+		resp := make([]byte, 65507)
+		targetConn.SetReadDeadline(time.Now().Add(UDP_TIMEOUT))
+		n, err := targetConn.Read(resp)
+		if err != nil {
+			if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+				log.Printf("UDP read err: %v\r\n", err)
+			}
+			return
 		}
-		return
-	}
 
-	if _, err := conn.WriteToUDP(resp[:n], clientAddr); err != nil {
-		log.Printf("UDP write err: %v\r\n", err)
+		if _, err := conn.WriteToUDP(resp[:n], clientAddr); err != nil {
+			log.Printf("UDP write err: %v\r\n", err)
+		}
 	}
 }
 

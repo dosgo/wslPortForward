@@ -210,10 +210,15 @@ func showConfigDialog(cfg *config.ProxyConfig, onSave func(*config.ProxyConfig))
 			})
 			return
 		}
+		newCfg := &config.ProxyConfig{
+			Protocol:   protocol.Selected,
+			ListenPort: int(num),
+			TargetAddr: targetAddr.Text,
+		}
 
 		for _, v := range conf.Configs {
-			if v.Protocol == cfg.Protocol && v.ListenPort == cfg.ListenPort {
-				if v.ID != cfg.ID {
+			if v.Protocol == newCfg.Protocol && v.ListenPort == newCfg.ListenPort {
+				if v.ID != newCfg.ID {
 					ErrorDialog := dialog.NewError(errors.New(config.GetLang("PortErrUsed")), mainWindow)
 					ErrorDialog.Show()
 					ErrorDialog.SetOnClosed(func() {
@@ -224,11 +229,6 @@ func showConfigDialog(cfg *config.ProxyConfig, onSave func(*config.ProxyConfig))
 			}
 		}
 
-		newCfg := &config.ProxyConfig{
-			Protocol:   protocol.Selected,
-			ListenPort: int(num),
-			TargetAddr: targetAddr.Text,
-		}
 		onSave(newCfg)
 	}, mainWindow)
 	confDialog.Show()
