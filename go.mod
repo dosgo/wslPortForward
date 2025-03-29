@@ -14,6 +14,7 @@ require (
 	github.com/Bios-Marcel/wastebasket v0.0.4-0.20240213135800-f26f1ae0a7c4 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/Masterminds/vcs v1.13.3 // indirect
+	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/anthonynsimon/bild v0.13.0 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/chewxy/math32 v1.10.1 // indirect
