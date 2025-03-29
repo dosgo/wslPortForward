@@ -6,6 +6,7 @@ require (
 	cogentcore.org/core v0.3.8
 	fyne.io/fyne/v2 v2.5.5
 	github.com/getlantern/systray v1.2.2
+	github.com/jeandeaual/go-locale v0.0.0-20240223122105-ce5225dcaa49
 )
 
 require (
@@ -42,7 +43,6 @@ require (
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/hackpadfs v0.2.1 // indirect
 	github.com/hack-pad/safejs v0.1.1 // indirect
-	github.com/jeandeaual/go-locale v0.0.0-20240223122105-ce5225dcaa49 // indirect
 	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/jsummers/gobmp v0.0.0-20151104160322-e2ba15ffa76e // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect

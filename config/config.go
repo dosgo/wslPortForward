@@ -11,7 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/jeandeaual/go-locale"
 )
+
+var currentLang = "en"
 
 type ProxyConfig struct {
 	ID         string       `display:"-" json:"id"`
@@ -101,13 +105,15 @@ var langMap = map[string]map[string]string{
 	},
 }
 
-// 获取当前语言文本
-func GetLang(key string) string {
-	lang := os.Getenv("LANG")
-	var currentLang = "en"
-	if strings.Contains(lang, "zh_CN") || strings.Contains(lang, "zh_TW") {
+func init() {
+	userLocale, err := locale.GetLocale()
+	if err == nil && (strings.Contains(userLocale, "zh_CN") || strings.Contains(userLocale, "zh_TW") || strings.Contains(userLocale, "zh-CN")) {
 		currentLang = "zh"
 	}
+}
+
+// 获取当前语言文本
+func GetLang(key string) string {
 	return langMap[currentLang][key]
 }
 

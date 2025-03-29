@@ -79,11 +79,11 @@ func (clist *CustomList) Update() {
 		})
 
 		// 编辑按钮
-		core.NewButton(row).SetText("Edit").OnClick(func(e events.Event) {
+		core.NewButton(row).SetText(config.GetLang("Edit")).OnClick(func(e events.Event) {
 			showEditDialog(item, clist.body, i)
 		})
 		// 删除按钮
-		core.NewButton(row).SetText("remove").OnClick(func(e events.Event) {
+		core.NewButton(row).SetText(config.GetLang("Delete")).OnClick(func(e events.Event) {
 			if conf.Configs[i].Listener != nil {
 				conf.Configs[i].Listener.Close()
 			}
@@ -98,7 +98,7 @@ func (clist *CustomList) Update() {
 
 func main() {
 	initLog()
-	mainWindow = core.NewBody("wslPortForward")
+	mainWindow = core.NewBody(config.GetLang("AppName"))
 
 	mainWindow.Styles.Min.Set(units.Dp(800), units.Dp(600))
 	mainWindow.Scene.ContextMenus = nil
@@ -119,16 +119,15 @@ func buildUI(b *core.Body) {
 	fr := core.NewFrame(b)
 	core.NewFuncButton(fr).SetFunc(func() {
 		showAddDialog(b)
-	}).SetText("Add Settings") //.SetProperty("", "Add Settings")
+	}).SetText(config.GetLang("AddSettings")) //.SetProperty("", "Add Settings")
 
 	core.NewFuncButton(fr).SetFunc(func() {
 		showGlobalSettings(b)
-	}).SetText("Global Settings")
-	core.NewText(b).SetText("Proxy List:")
+	}).SetText(config.GetLang("GlobalSettings"))
+	core.NewText(b).SetText(config.GetLang("ProxyList"))
 	configList = newCustomList()
-	core.NewText(b).SetText("Logs:")
+	core.NewText(b).SetText(config.GetLang("Logs"))
 	logData = core.NewText(b)
-	logData.SetText("")
 	logData.SetReadOnly(true)
 	logData.Styler(func(s *styles.Style) {
 		s.SetTextWrap(true) // 多行模式
@@ -151,9 +150,9 @@ func showAddDialog(b *core.Body) {
 }
 
 func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
-	var title = "Add Settings"
+	var title = config.GetLang("AddSettings")
 	if index > -1 {
-		title = "Edit Settings"
+		title = config.GetLang("EditSettings")
 	}
 
 	d := core.NewBody(title)
@@ -166,7 +165,7 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 		d.AddCancel(bar)
 		d.AddOK(bar).OnClick(func(e events.Event) {
 			if cfg.ListenPort < 1 || cfg.ListenPort > 65535 {
-				core.MessageSnackbar(d, "The port can only be 1-65535")
+				core.MessageSnackbar(d, config.GetLang("PortErrMsg"))
 				e.SetHandled()
 				return
 			}
@@ -174,7 +173,7 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 			for _, v := range conf.Configs {
 				if v.Protocol == cfg.Protocol && v.ListenPort == cfg.ListenPort {
 					if v.ID != cfg.ID {
-						core.MessageSnackbar(d, "Port is used")
+						core.MessageSnackbar(d, config.GetLang("PortErrUsed"))
 						e.SetHandled()
 						return
 					}
@@ -194,7 +193,7 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 }
 
 func showGlobalSettings(b *core.Body) {
-	d := core.NewBody("Global Settings")
+	d := core.NewBody(config.GetLang("GlobalSettings"))
 	d.Scene.ContextMenus = nil
 	form := core.NewForm(d)
 	form.SetStruct(conf)
@@ -228,23 +227,23 @@ func initLog() {
 
 func onReady() {
 	// ------------------------- 设置图标和提示 -------------------------
-	systray.SetIcon(config.ResourceIconPng)     // 使用内嵌的图标数据
-	systray.SetTitle("WslPortForward")          // 设置标题（部分平台显示）
-	systray.SetTooltip("WslPortForward server") // 鼠标悬停提示
+	//systray.SetIcon(config.ResourceIconPng)     // 使用内嵌的图标数据
+	systray.SetTitle(config.GetLang("AppName"))   // 设置标题（部分平台显示）
+	systray.SetTooltip(config.GetLang("AppName")) // 鼠标悬停提示
 
 	// ------------------------- 添加菜单项 -------------------------
 	// 普通菜单项
-	mShow := systray.AddMenuItem("show", "show setting")
+	mShow := systray.AddMenuItem(config.GetLang("ShowSettings"), config.GetLang("ShowSettings"))
 
 	// 退出项
-	mQuit := systray.AddMenuItem("exit", "exit")
+	mQuit := systray.AddMenuItem(config.GetLang("Quit"), config.GetLang("Quit"))
 
 	// ------------------------- 处理菜单点击事件 -------------------------
 	go func() {
 		for {
 			select {
 			case <-mShow.ClickedCh:
-				fmt.Println("显示窗口")
+				fmt.Println(config.GetLang("ShowSettings"))
 				//showWindow() // 自定义显示窗口逻辑
 
 			case <-mQuit.ClickedCh:
