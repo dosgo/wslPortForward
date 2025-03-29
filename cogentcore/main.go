@@ -103,6 +103,7 @@ func (clist *CustomList) Update() {
 
 func main() {
 	initLog()
+	config.SetLang("en")
 	conf = &config.Conf{}
 	config.LoadConfigs(conf, configFile)
 	proxy.StartPoxy(conf, false)

@@ -116,6 +116,12 @@ func init() {
 func GetLang(key string) string {
 	return langMap[currentLang][key]
 }
+func SetLang(lang string) {
+	_, ok := langMap[lang]
+	if ok {
+		currentLang = lang
+	}
+}
 
 //go:embed icon.png
 var ResourceIconPng []byte
