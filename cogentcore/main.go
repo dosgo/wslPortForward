@@ -1,15 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"image"
 	"image/color"
 	"log"
 	"os"
+	"runtime"
 	"time"
 
 	"cogentcore.org/core/colors"
 	"cogentcore.org/core/core"
+	"cogentcore.org/core/system"
 
 	"cogentcore.org/core/events"
 	"cogentcore.org/core/paint"
@@ -27,12 +31,13 @@ const (
 var (
 	conf       *config.Conf
 	mainWindow *core.Body
-	logData    *core.Text
+	logData    string
+	logText    *core.Text
 	configList *CustomList
 )
 
-func newCustomList() *CustomList {
-	customList := &CustomList{data: &conf.Configs, body: mainWindow}
+func newCustomList(body *core.Body) *CustomList {
+	customList := &CustomList{data: &conf.Configs, body: body}
 	// 主布局框架
 	customList.Fr = core.NewFrame(customList.body)
 	customList.Fr.Styler(func(s *styles.Style) {
@@ -98,13 +103,8 @@ func (clist *CustomList) Update() {
 
 func main() {
 	initLog()
-	mainWindow = core.NewBody(config.GetLang("AppName"))
-
-	mainWindow.Styles.Min.Set(units.Dp(800), units.Dp(600))
-	mainWindow.Scene.ContextMenus = nil
 	conf = &config.Conf{}
 	config.LoadConfigs(conf, configFile)
-	buildUI(mainWindow)
 	proxy.StartPoxy(conf, false)
 	ctx, _ := context.WithCancel(context.Background())
 	cmd := config.StartWsl(ctx, conf)
@@ -112,24 +112,32 @@ func main() {
 		defer cmd.Process.Kill()
 	}
 	go func() { systray.Run(onReady, onExit) }()
-	mainWindow.RunMainWindow()
+	if !conf.HideWindow {
+		buildUI()
+	}
+	system.TheApp.MainLoop()
 }
 
-func buildUI(b *core.Body) {
-	fr := core.NewFrame(b)
+func buildUI() {
+	mainWindow = core.NewBody(config.GetLang("AppName"))
+	mainWindow.Styles.Min.Set(units.Dp(800), units.Dp(600))
+	mainWindow.Scene.ContextMenus = nil
+
+	fr := core.NewFrame(mainWindow)
 	core.NewFuncButton(fr).SetFunc(func() {
-		showAddDialog(b)
+		showAddDialog(mainWindow)
 	}).SetText(config.GetLang("AddSettings")) //.SetProperty("", "Add Settings")
 
 	core.NewFuncButton(fr).SetFunc(func() {
-		showGlobalSettings(b)
+		showGlobalSettings(mainWindow)
 	}).SetText(config.GetLang("GlobalSettings"))
-	core.NewText(b).SetText(config.GetLang("ProxyList"))
-	configList = newCustomList()
-	core.NewText(b).SetText(config.GetLang("Logs"))
-	logData = core.NewText(b)
-	logData.SetReadOnly(true)
-	logData.Styler(func(s *styles.Style) {
+	core.NewText(mainWindow).SetText(config.GetLang("ProxyList"))
+	configList = newCustomList(mainWindow)
+	core.NewText(mainWindow).SetText(config.GetLang("Logs"))
+	logText = core.NewText(mainWindow)
+	logText.SetReadOnly(true)
+	logText.SetText(logData)
+	logText.Styler(func(s *styles.Style) {
 		s.SetTextWrap(true) // 多行模式
 		s.Background = colors.Uniform(colors.ToBase(color.RGBA{0xeb, 0xeb, 0xeb, 0x20}))
 		s.Padding.Set(units.Dp(8), units.Dp(8))
@@ -138,6 +146,17 @@ func buildUI(b *core.Body) {
 		s.Text.WhiteSpace = styles.WhiteSpacePre
 		s.Max.Set(units.Dp(800))
 	})
+	mainWindow.RunWindow()
+
+	//set icon
+	reader := bytes.NewReader(config.ResourceIconPng)
+	img, _, err := image.Decode(reader)
+	if err == nil {
+		window := system.TheApp.Window(0)
+		if window != nil {
+			window.SetIcon([]image.Image{img})
+		}
+	}
 }
 
 func showAddDialog(b *core.Body) {
@@ -217,8 +236,9 @@ func initLog() {
 			n, _ := r.Read(buf)
 			if n > 0 {
 				// 主线程更新UI
-				if logData != nil {
-					logData.SetText(logData.Text + string(buf[:n]))
+				logData = logData + string(buf[:n])
+				if logText != nil {
+					logText.SetText(logData)
 				}
 			}
 		}
@@ -227,7 +247,11 @@ func initLog() {
 
 func onReady() {
 	// ------------------------- 设置图标和提示 -------------------------
-	//systray.SetIcon(config.ResourceIconPng)     // 使用内嵌的图标数据
+	if runtime.GOOS == "windows" {
+		systray.SetIcon(config.ResourceIconIco) // 使用内嵌的图标数据
+	} else {
+		systray.SetIcon(config.ResourceIconPng) // 使用内嵌的图标数据
+	}
 	systray.SetTitle(config.GetLang("AppName"))   // 设置标题（部分平台显示）
 	systray.SetTooltip(config.GetLang("AppName")) // 鼠标悬停提示
 
@@ -243,12 +267,9 @@ func onReady() {
 		for {
 			select {
 			case <-mShow.ClickedCh:
-				fmt.Println(config.GetLang("ShowSettings"))
-				//showWindow() // 自定义显示窗口逻辑
-
+				buildUI()
 			case <-mQuit.ClickedCh:
-				systray.Quit()
-				mainWindow.Close()
+				system.TheApp.Quit()
 				return
 			}
 		}

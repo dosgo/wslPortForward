@@ -120,6 +120,9 @@ func GetLang(key string) string {
 //go:embed icon.png
 var ResourceIconPng []byte
 
+//go:embed icon.ico
+var ResourceIconIco []byte
+
 func GetWslIP() string {
 	cmd1 := exec.Command("wsl", "--", "hostname", "-I")
 	output, err := cmd1.CombinedOutput()
