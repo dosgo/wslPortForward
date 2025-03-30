@@ -63,7 +63,7 @@ func (clist *CustomList) Update() {
 			s.Direction = styles.Row
 			s.Align.Items = styles.Center
 			s.Border.Radius = styles.BorderRadiusMedium
-			s.Min.Set(units.Dp(800), units.Dp(20))
+			s.Min.Set(units.Dp(600), units.Dp(20))
 		})
 
 		core.NewText(row).SetText(fmt.Sprintf("0.0.0.0:%d → %s (%s)",
@@ -121,7 +121,7 @@ func main() {
 
 func buildUI() {
 	mainWindow = core.NewBody(config.GetLang("AppName"))
-	mainWindow.Styles.Min.Set(units.Dp(800), units.Dp(600))
+	mainWindow.Styles.Max.Set(units.Dp(600), units.Dp(500))
 	mainWindow.Scene.ContextMenus = nil
 
 	fr := core.NewFrame(mainWindow)
@@ -143,9 +143,9 @@ func buildUI() {
 		s.Background = colors.Uniform(colors.ToBase(color.RGBA{0xeb, 0xeb, 0xeb, 0x20}))
 		s.Padding.Set(units.Dp(8), units.Dp(8))
 		s.Border.Radius = styles.BorderRadiusExtraLarge
-		s.Min.Set(units.Dp(800), units.Dp(20))
+		s.Min.Set(units.Dp(600), units.Dp(20))
 		s.Text.WhiteSpace = styles.WhiteSpacePre
-		s.Max.Set(units.Dp(800))
+		s.Max.Set(units.Dp(600))
 	})
 	mainWindow.RunWindow()
 
