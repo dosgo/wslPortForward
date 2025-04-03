@@ -19,9 +19,9 @@ import (
 	"cogentcore.org/core/paint"
 	"cogentcore.org/core/styles"
 	"cogentcore.org/core/styles/units"
+	"fyne.io/systray"
 	"github.com/dosgo/wslPortForward/config"
 	"github.com/dosgo/wslPortForward/proxy"
-	"github.com/getlantern/systray"
 )
 
 const (
@@ -150,7 +150,7 @@ func main() {
 	if cmd != nil {
 		defer cmd.Process.Kill()
 	}
-	go func() { systray.Run(onReady, onExit) }()
+	systray.RunWithExternalLoop(onReady, onExit)
 	if !conf.HideWindow {
 		buildUI()
 	}
@@ -317,18 +317,19 @@ func onReady() {
 	mQuit := systray.AddMenuItem(config.GetLang("Quit"), config.GetLang("Quit"))
 
 	// ------------------------- 处理菜单点击事件 -------------------------
+
 	go func() {
-		for {
-			select {
-			case <-mShow.ClickedCh:
-				window := system.TheApp.Window(0)
-				if window == nil {
-					buildUI()
-				}
-			case <-mQuit.ClickedCh:
-				system.TheApp.Quit()
-				return
+		for range mShow.ClickedCh {
+			window := system.TheApp.Window(0)
+			if window == nil {
+				buildUI()
 			}
+		}
+	}()
+
+	go func() {
+		for range mQuit.ClickedCh {
+			system.TheApp.Quit()
 		}
 	}()
 }
