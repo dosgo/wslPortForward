@@ -34,6 +34,7 @@ var (
 	logData    string
 	logText    *core.Text
 	configList *CustomList
+	iconImg    image.Image
 )
 
 func newCustomList(body *core.Body) *CustomList {
@@ -53,12 +54,45 @@ type CustomList struct {
 	Fr   *core.Frame
 }
 
+func (clist *CustomList) Destroy() {
+	for _, item := range clist.Fr.Children {
+		for _, item1 := range item.AsTree().Children {
+			item1.Destroy()
+		}
+		item.Destroy()
+	}
+	clist.Fr.Destroy()
+	clist.body.Destroy()
+}
 func (clist *CustomList) Update() {
-	clist.Fr.DeleteChildren() // 清空现有内容
+	//	clist.Fr.DeleteChildren() // 清空现有内容
+
+	for i, item := range clist.Fr.Children {
+		if i >= len(*clist.data) {
+			item.Destroy()
+		}
+	}
 	// 动态生成列表项
 	for i, item := range *clist.data {
-		// 单项容器
-		row := core.NewFrame(clist.Fr)
+		var row *core.Frame
+		var text *core.Text
+		var statusCv *core.Canvas
+		var editBt *core.Button
+		var delBt *core.Button
+		if i < len(clist.Fr.Children) {
+			row = clist.Fr.Children[i].(*core.Frame)
+			text = row.Children[0].(*core.Text)
+			statusCv = row.Children[1].(*core.Canvas)
+			editBt = row.Children[2].(*core.Button)
+			delBt = row.Children[3].(*core.Button)
+		} else {
+			row = core.NewFrame(clist.Fr)
+			text = core.NewText(row)
+			statusCv = core.NewCanvas(row)
+			editBt = core.NewButton(row)
+			delBt = core.NewButton(row)
+		}
+
 		row.Styler(func(s *styles.Style) {
 			s.Direction = styles.Row
 			s.Align.Items = styles.Center
@@ -66,9 +100,9 @@ func (clist *CustomList) Update() {
 			s.Min.Set(units.Dp(600), units.Dp(20))
 		})
 
-		core.NewText(row).SetText(fmt.Sprintf("0.0.0.0:%d → %s (%s)",
+		text.SetText(fmt.Sprintf("0.0.0.0:%d → %s (%s)",
 			item.ListenPort, item.TargetAddr, item.Protocol))
-		statusCv := core.NewCanvas(row)
+
 		statusCv.SetDraw(func(pc *paint.Context) {
 			pc.DrawCircle(0.5, 0.5, 0.3)
 			if item.Status {
@@ -84,11 +118,11 @@ func (clist *CustomList) Update() {
 		})
 
 		// 编辑按钮
-		core.NewButton(row).SetText(config.GetLang("Edit")).OnClick(func(e events.Event) {
+		editBt.SetText(config.GetLang("Edit")).OnClick(func(e events.Event) {
 			showEditDialog(item, clist.body, i)
 		})
 		// 删除按钮
-		core.NewButton(row).SetText(config.GetLang("Delete")).OnClick(func(e events.Event) {
+		delBt.SetText(config.GetLang("Delete")).OnClick(func(e events.Event) {
 			if conf.Configs[i].Listener != nil {
 				conf.Configs[i].Listener.Close()
 			}
@@ -102,6 +136,10 @@ func (clist *CustomList) Update() {
 }
 
 func main() {
+	//set icon
+	reader := bytes.NewReader(config.ResourceIconPng)
+	iconImg, _, _ = image.Decode(reader)
+
 	initLog()
 	config.SetLang("en")
 	conf = &config.Conf{}
@@ -123,7 +161,6 @@ func buildUI() {
 	mainWindow = core.NewBody(config.GetLang("AppName"))
 	mainWindow.Styles.Max.Set(units.Dp(600), units.Dp(500))
 	mainWindow.Scene.ContextMenus = nil
-
 	fr := core.NewFrame(mainWindow)
 	core.NewFuncButton(fr).SetFunc(func() {
 		showAddDialog(mainWindow)
@@ -148,14 +185,18 @@ func buildUI() {
 		s.Max.Set(units.Dp(600))
 	})
 	mainWindow.RunWindow()
-
-	//set icon
-	reader := bytes.NewReader(config.ResourceIconPng)
-	img, _, err := image.Decode(reader)
-	if err == nil {
+	mainWindow.OnClose(func(e events.Event) {
+		fr.DeleteChildren()
+		fr.Destroy()
+		logText.Destroy()
+		configList.Destroy()
+		mainWindow.DeleteChildren()
+		mainWindow.Destroy()
+	})
+	if iconImg != nil {
 		window := system.TheApp.Window(0)
 		if window != nil {
-			window.SetIcon([]image.Image{img})
+			window.SetIcon([]image.Image{iconImg})
 		}
 	}
 }
@@ -209,6 +250,12 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 			configList.Update()
 		})
 	})
+	d.OnClose(func(e events.Event) {
+		form.DeleteChildren()
+		form.Destroy()
+		d.DeleteChildren()
+		d.Destroy()
+	})
 	d.RunWindowDialog(b)
 }
 
@@ -223,6 +270,12 @@ func showGlobalSettings(b *core.Body) {
 		d.AddOK(bar).OnClick(func(e events.Event) {
 			config.SaveConfigs(conf, configFile)
 		})
+	})
+	d.OnClose(func(e events.Event) {
+		form.DeleteChildren()
+		form.Destroy()
+		d.DeleteChildren()
+		d.Destroy()
 	})
 	d.RunWindowDialog(b)
 }
@@ -268,7 +321,10 @@ func onReady() {
 		for {
 			select {
 			case <-mShow.ClickedCh:
-				buildUI()
+				window := system.TheApp.Window(0)
+				if window == nil {
+					buildUI()
+				}
 			case <-mQuit.ClickedCh:
 				system.TheApp.Quit()
 				return
