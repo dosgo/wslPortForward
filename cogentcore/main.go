@@ -65,8 +65,6 @@ func (clist *CustomList) Destroy() {
 	clist.body.Destroy()
 }
 func (clist *CustomList) Update() {
-	//	clist.Fr.DeleteChildren() // 清空现有内容
-
 	for i, item := range clist.Fr.Children {
 		if i >= len(*clist.data) {
 			item.Destroy()
@@ -102,21 +100,18 @@ func (clist *CustomList) Update() {
 
 		text.SetText(fmt.Sprintf("0.0.0.0:%d → %s (%s)",
 			item.ListenPort, item.TargetAddr, item.Protocol))
-
-		statusCv.SetDraw(func(pc *paint.Context) {
-			pc.DrawCircle(0.5, 0.5, 0.3)
+		statusCv.SetDraw(func(pc *paint.Painter) {
+			pc.Circle(0.5, 0.5, 0.3)
 			if item.Status {
-				pc.FillStyle.Color = colors.Scheme.Success.Base
+				pc.Fill.Color = colors.Scheme.Success.Base
 			} else {
-				pc.FillStyle.Color = colors.Scheme.Error.Base
+				pc.Fill.Color = colors.Scheme.Error.Base
 			}
-			pc.Fill()
+			pc.PathDone()
 		})
-
 		statusCv.Styler(func(s *styles.Style) {
 			s.Min.Set(units.Dp(30), units.Dp(30))
 		})
-
 		// 编辑按钮
 		editBt.SetText(config.GetLang("Edit")).OnClick(func(e events.Event) {
 			showEditDialog(item, clist.body, i)
@@ -165,7 +160,6 @@ func buildUI() {
 	core.NewFuncButton(fr).SetFunc(func() {
 		showAddDialog(mainWindow)
 	}).SetText(config.GetLang("AddSettings")) //.SetProperty("", "Add Settings")
-
 	core.NewFuncButton(fr).SetFunc(func() {
 		showGlobalSettings(mainWindow)
 	}).SetText(config.GetLang("GlobalSettings"))
@@ -181,7 +175,6 @@ func buildUI() {
 		s.Padding.Set(units.Dp(8), units.Dp(8))
 		s.Border.Radius = styles.BorderRadiusExtraLarge
 		s.Min.Set(units.Dp(600), units.Dp(20))
-		s.Text.WhiteSpace = styles.WhiteSpacePre
 		s.Max.Set(units.Dp(600))
 	})
 	mainWindow.RunWindow()
@@ -215,7 +208,6 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 	if index > -1 {
 		title = config.GetLang("EditSettings")
 	}
-
 	d := core.NewBody(title)
 	d.Scene.ContextMenus = nil
 	form := core.NewForm(d)
@@ -230,7 +222,6 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 				e.SetHandled()
 				return
 			}
-
 			for _, v := range conf.Configs {
 				if v.Protocol == cfg.Protocol && v.ListenPort == cfg.ListenPort {
 					if v.ID != cfg.ID {
@@ -240,7 +231,6 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 					}
 				}
 			}
-
 			cfg.ID = fmt.Sprintf("%d", time.Now().UnixNano())
 			if index == -1 {
 				conf.Configs = append(conf.Configs, cfg)
@@ -258,7 +248,6 @@ func showEditDialog(cfg *config.ProxyConfig, b *core.Body, index int) {
 	})
 	d.RunWindowDialog(b)
 }
-
 func showGlobalSettings(b *core.Body) {
 	d := core.NewBody(config.GetLang("GlobalSettings"))
 	d.Scene.ContextMenus = nil
@@ -279,7 +268,6 @@ func showGlobalSettings(b *core.Body) {
 	})
 	d.RunWindowDialog(b)
 }
-
 func initLog() {
 	r, w, _ := os.Pipe()
 	log.SetOutput(w)
@@ -308,31 +296,22 @@ func onReady() {
 	}
 	systray.SetTitle(config.GetLang("AppName"))   // 设置标题（部分平台显示）
 	systray.SetTooltip(config.GetLang("AppName")) // 鼠标悬停提示
-
-	// ------------------------- 添加菜单项 -------------------------
-	// 普通菜单项
 	mShow := systray.AddMenuItem(config.GetLang("ShowSettings"), config.GetLang("ShowSettings"))
-
-	// 退出项
 	mQuit := systray.AddMenuItem(config.GetLang("Quit"), config.GetLang("Quit"))
 
-	// ------------------------- 处理菜单点击事件 -------------------------
-
 	go func() {
-		for range mShow.ClickedCh {
-			window := system.TheApp.Window(0)
-			if window == nil {
-				buildUI()
+		for {
+			select {
+			case <-mShow.ClickedCh:
+				window := system.TheApp.Window(0)
+				if window == nil {
+					buildUI()
+				}
+			case <-mQuit.ClickedCh:
+				system.TheApp.Quit()
 			}
 		}
 	}()
-
-	go func() {
-		for range mQuit.ClickedCh {
-			system.TheApp.Quit()
-		}
-	}()
 }
-
 func onExit() {
 }
