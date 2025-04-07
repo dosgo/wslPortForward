@@ -30,22 +30,20 @@ const (
 
 var (
 	conf       *config.Conf
-	mainWindow *core.Body
 	logData    string
 	logText    *core.Text
 	configList *CustomList
 	iconImg    image.Image
 )
 
-func newCustomList(body *core.Body) *CustomList {
-	customList := &CustomList{data: &conf.Configs, body: body}
+func newCustomList(body *core.Body) {
+	configList = &CustomList{data: &conf.Configs, body: body}
 	// 主布局框架
-	customList.Fr = core.NewFrame(customList.body)
-	customList.Fr.Styler(func(s *styles.Style) {
+	configList.Fr = core.NewFrame(configList.body)
+	configList.Fr.Styler(func(s *styles.Style) {
 		s.Direction = styles.Column // 垂直布局
 	})
-	customList.Update()
-	return customList
+	configList.Update()
 }
 
 type CustomList struct {
@@ -153,7 +151,7 @@ func main() {
 }
 
 func buildUI() {
-	mainWindow = core.NewBody(config.GetLang("AppName"))
+	mainWindow := core.NewBody(config.GetLang("AppName"))
 	mainWindow.Styles.Max.Set(units.Dp(600), units.Dp(500))
 	mainWindow.Scene.ContextMenus = nil
 	fr := core.NewFrame(mainWindow)
@@ -164,7 +162,7 @@ func buildUI() {
 		showGlobalSettings(mainWindow)
 	}).SetText(config.GetLang("GlobalSettings"))
 	core.NewText(mainWindow).SetText(config.GetLang("ProxyList"))
-	configList = newCustomList(mainWindow)
+	newCustomList(mainWindow)
 	core.NewText(mainWindow).SetText(config.GetLang("Logs"))
 	logText = core.NewText(mainWindow)
 	logText.SetReadOnly(true)
@@ -181,10 +179,18 @@ func buildUI() {
 	mainWindow.OnClose(func(e events.Event) {
 		fr.DeleteChildren()
 		fr.Destroy()
+		fr = nil
 		logText.Destroy()
+		logText = nil
 		configList.Destroy()
+		configList = nil
 		mainWindow.DeleteChildren()
 		mainWindow.Destroy()
+		mainWindow = nil
+		go func() {
+			time.Sleep(time.Second * 1)
+			runtime.GC()
+		}()
 	})
 	if iconImg != nil {
 		window := system.TheApp.Window(0)
