@@ -3,7 +3,7 @@ module github.com/dosgo/wslPortForward
 go 1.24.0
 
 require (
-	cogentcore.org/core v0.3.9-0.20250226161054-6ec962b2d812
+	cogentcore.org/core v0.3.9-0.20250406033103-abf571a3ef6c
 	fyne.io/fyne/v2 v2.5.5
 	fyne.io/systray v1.11.0
 	github.com/jeandeaual/go-locale v0.0.0-20240223122105-ce5225dcaa49
