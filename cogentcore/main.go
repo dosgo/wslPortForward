@@ -30,20 +30,22 @@ const (
 
 var (
 	conf       *config.Conf
+	mainWindow *core.Body
 	logData    string
 	logText    *core.Text
 	configList *CustomList
 	iconImg    image.Image
 )
 
-func newCustomList(body *core.Body) {
-	configList = &CustomList{data: &conf.Configs, body: body}
+func newCustomList(body *core.Body) *CustomList {
+	customList := &CustomList{data: &conf.Configs, body: body}
 	// 主布局框架
-	configList.Fr = core.NewFrame(configList.body)
-	configList.Fr.Styler(func(s *styles.Style) {
+	customList.Fr = core.NewFrame(customList.body)
+	customList.Fr.Styler(func(s *styles.Style) {
 		s.Direction = styles.Column // 垂直布局
 	})
-	configList.Update()
+	customList.Update()
+	return customList
 }
 
 type CustomList struct {
@@ -59,8 +61,8 @@ func (clist *CustomList) Destroy() {
 		}
 		item.Destroy()
 	}
+	clist.Fr.Scene.Destroy()
 	clist.Fr.Destroy()
-	clist.body.Destroy()
 }
 func (clist *CustomList) Update() {
 	for i, item := range clist.Fr.Children {
@@ -132,9 +134,7 @@ func main() {
 	//set icon
 	reader := bytes.NewReader(config.ResourceIconPng)
 	iconImg, _, _ = image.Decode(reader)
-
 	initLog()
-	config.SetLang("en")
 	conf = &config.Conf{}
 	config.LoadConfigs(conf, configFile)
 	proxy.StartPoxy(conf, false)
@@ -151,7 +151,7 @@ func main() {
 }
 
 func buildUI() {
-	mainWindow := core.NewBody(config.GetLang("AppName"))
+	mainWindow = core.NewBody(config.GetLang("AppName"))
 	mainWindow.Styles.Max.Set(units.Dp(600), units.Dp(500))
 	mainWindow.Scene.ContextMenus = nil
 	fr := core.NewFrame(mainWindow)
@@ -162,7 +162,7 @@ func buildUI() {
 		showGlobalSettings(mainWindow)
 	}).SetText(config.GetLang("GlobalSettings"))
 	core.NewText(mainWindow).SetText(config.GetLang("ProxyList"))
-	newCustomList(mainWindow)
+	configList = newCustomList(mainWindow)
 	core.NewText(mainWindow).SetText(config.GetLang("Logs"))
 	logText = core.NewText(mainWindow)
 	logText.SetReadOnly(true)
@@ -176,19 +176,22 @@ func buildUI() {
 		s.Max.Set(units.Dp(600))
 	})
 	mainWindow.RunWindow()
+
 	mainWindow.OnClose(func(e events.Event) {
 		fr.DeleteChildren()
 		fr.Destroy()
-		fr = nil
 		logText.Destroy()
 		logText = nil
 		configList.Destroy()
 		configList = nil
 		mainWindow.DeleteChildren()
+		mainWindow.Scene.Destroy()
+		mainWindow.Scene.TextShaper = nil
+		mainWindow.Scene = nil
 		mainWindow.Destroy()
 		mainWindow = nil
 		go func() {
-			time.Sleep(time.Second * 1)
+			time.Sleep(1 * time.Second)
 			runtime.GC()
 		}()
 	})
