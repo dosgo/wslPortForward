@@ -107,7 +107,8 @@ func (clist *CustomList) Update() {
 			} else {
 				pc.Fill.Color = colors.Scheme.Error.Base
 			}
-			pc.PathDone()
+			pc.Draw()
+
 		})
 		statusCv.Styler(func(s *styles.Style) {
 			s.Min.Set(units.Dp(30), units.Dp(30))
@@ -186,7 +187,7 @@ func buildUI() {
 		configList = nil
 		mainWindow.DeleteChildren()
 		mainWindow.Scene.Destroy()
-		mainWindow.Scene.TextShaper = nil
+		//mainWindow.Scene.TextShaper = nil
 		mainWindow.Scene = nil
 		mainWindow.Destroy()
 		mainWindow = nil
