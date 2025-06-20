@@ -52,6 +52,7 @@ func main() {
 	go func() {
 
 		w := new(app.Window)
+		w.Option(app.Title(config.GetLang("AppName")))
 		ui.initLog()
 		proxy.StartPoxy(ui.conf, false)
 		if err := ui.Loop(w); err != nil {
